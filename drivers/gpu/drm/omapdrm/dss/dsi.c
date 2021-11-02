@@ -2149,12 +2149,11 @@ static int dsi_vc_send_short(struct dsi_data *dsi, int vc,
 			     const struct mipi_dsi_msg *msg)
 {
 	struct mipi_dsi_packet pkt;
-	int ret;
 	u32 r;
 
-	ret = mipi_dsi_create_packet(&pkt, msg);
-	if (ret < 0)
-		return ret;
+	r = mipi_dsi_create_packet(&pkt, msg);
+	if (r < 0)
+		return r;
 
 	WARN_ON(!dsi_bus_is_locked(dsi));
 

@@ -1697,14 +1697,9 @@ void vm_ioctl(struct kvm_vm *vm, unsigned long cmd, void *arg)
 {
 	int ret;
 
-	ret = _vm_ioctl(vm, cmd, arg);
+	ret = ioctl(vm->fd, cmd, arg);
 	TEST_ASSERT(ret == 0, "vm ioctl %lu failed, rc: %i errno: %i (%s)",
 		cmd, ret, errno, strerror(errno));
-}
-
-int _vm_ioctl(struct kvm_vm *vm, unsigned long cmd, void *arg)
-{
-	return ioctl(vm->fd, cmd, arg);
 }
 
 /*

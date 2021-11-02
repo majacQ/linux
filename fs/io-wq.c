@@ -488,8 +488,6 @@ static int io_wqe_worker(void *data)
 	set_task_comm(current, buf);
 
 	while (!test_bit(IO_WQ_BIT_EXIT, &wq->state)) {
-		long ret;
-
 		set_current_state(TASK_INTERRUPTIBLE);
 loop:
 		raw_spin_lock_irq(&wqe->lock);
@@ -500,8 +498,7 @@ loop:
 		__io_worker_idle(wqe, worker);
 		raw_spin_unlock_irq(&wqe->lock);
 		io_flush_signals();
-		ret = schedule_timeout(WORKER_IDLE_TIMEOUT);
-		if (try_to_freeze() || ret)
+		if (schedule_timeout(WORKER_IDLE_TIMEOUT))
 			continue;
 		if (fatal_signal_pending(current))
 			break;
@@ -712,7 +709,6 @@ static int io_wq_manager(void *data)
 		set_current_state(TASK_INTERRUPTIBLE);
 		io_wq_check_workers(wq);
 		schedule_timeout(HZ);
-		try_to_freeze();
 		if (fatal_signal_pending(current))
 			set_bit(IO_WQ_BIT_EXIT, &wq->state);
 	} while (!test_bit(IO_WQ_BIT_EXIT, &wq->state));
