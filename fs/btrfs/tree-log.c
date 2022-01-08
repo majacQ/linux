@@ -3218,6 +3218,13 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 	 */
 	mutex_unlock(&root->log_mutex);
 
+  <<<<<<< patch-1
+  =======
+	btrfs_init_log_ctx(&root_log_ctx, NULL);
+
+	mutex_lock(&log_root_tree->log_mutex);
+
+  >>>>>>> revert-7-master
 	if (btrfs_is_zoned(fs_info)) {
 		mutex_lock(&fs_info->tree_root->log_mutex);
 		if (!log_root_tree->node) {
@@ -3230,10 +3237,13 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 		mutex_unlock(&fs_info->tree_root->log_mutex);
 	}
 
+  <<<<<<< patch-1
 	btrfs_init_log_ctx(&root_log_ctx, NULL);
 
 	mutex_lock(&log_root_tree->log_mutex);
 
+  =======
+ >>>>>>> revert-7-master
 	index2 = log_root_tree->log_transid % 2;
 	list_add_tail(&root_log_ctx.list, &log_root_tree->log_ctxs[index2]);
 	root_log_ctx.log_transid = log_root_tree->log_transid;

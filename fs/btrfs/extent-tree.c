@@ -3328,9 +3328,17 @@ void btrfs_free_tree_block(struct btrfs_trans_handle *trans,
 		 * find a node pointing to this leaf and record operations that
 		 * point to this leaf.
 		 */
+  <<<<<<< patch-1
 		if (btrfs_header_level(buf) == 0 &&
 		    test_bit(BTRFS_FS_TREE_MOD_LOG_USERS, &fs_info->flags))
 			must_pin = true;
+  =======
+		if (btrfs_header_level(buf) == 0) {
+			read_lock(&fs_info->tree_mod_log_lock);
+			must_pin = !list_empty(&fs_info->tree_mod_seq_list);
+			read_unlock(&fs_info->tree_mod_log_lock);
+		}
+ >>>>>>> revert-7-master
 
 		if (must_pin || btrfs_is_zoned(fs_info)) {
 			btrfs_redirty_list_add(trans->transaction, buf);

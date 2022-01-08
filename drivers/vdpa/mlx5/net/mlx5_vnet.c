@@ -2550,7 +2550,11 @@ static int mlx5_vdpa_dev_add(struct vdpa_mgmt_dev *v_mdev, const char *name,
 	max_vqs = min_t(u32, max_vqs, MLX5_MAX_SUPPORTED_VQS);
 
 	ndev = vdpa_alloc_device(struct mlx5_vdpa_net, mvdev.vdev, mdev->device, &mlx5_vdpa_ops,
+  <<<<<<< patch-1
 				 name, false);
+  =======
+				 NULL);
+  >>>>>>> revert-7-master
 	if (IS_ERR(ndev))
 		return PTR_ERR(ndev);
 
@@ -2610,11 +2614,15 @@ static int mlx5_vdpa_dev_add(struct vdpa_mgmt_dev *v_mdev, const char *name,
 		goto err_res2;
 	}
 
+  <<<<<<< patch-1
 	ndev->nb.notifier_call = event_handler;
 	mlx5_notifier_register(mdev, &ndev->nb);
 	ndev->cur_num_vqs = 2 * mlx5_vdpa_max_qps(max_vqs);
 	mvdev->vdev.mdev = &mgtdev->mgtdev;
 	err = _vdpa_register_device(&mvdev->vdev, ndev->cur_num_vqs + 1);
+  =======
+	err = vdpa_register_device(&mvdev->vdev, 2 * mlx5_vdpa_max_qps(max_vqs));
+  >>>>>>> revert-7-master
 	if (err)
 		goto err_reg;
 

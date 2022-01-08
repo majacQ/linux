@@ -251,9 +251,14 @@ struct vdpasim *vdpasim_create(struct vdpasim_dev_attr *dev_attr)
 		ops = &vdpasim_config_ops;
 
 	vdpasim = vdpa_alloc_device(struct vdpasim, vdpa, NULL, ops,
+  <<<<<<< patch-1
 				    dev_attr->name, false);
 	if (IS_ERR(vdpasim)) {
 		ret = PTR_ERR(vdpasim);
+  =======
+				    dev_attr->name);
+	if (!vdpasim)
+  >>>>>>> revert-7-master
 		goto err_alloc;
 	}
 

@@ -625,12 +625,41 @@ static int ifcvf_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (ret) {
 		IFCVF_ERR(pdev,
 			  "Failed for adding devres for freeing irq vectors\n");
+  <<<<<<< patch-1
+  =======
+		return ret;
+	}
+
+	adapter = vdpa_alloc_device(struct ifcvf_adapter, vdpa,
+				    dev, &ifc_vdpa_ops, NULL);
+	if (adapter == NULL) {
+		IFCVF_ERR(pdev, "Failed to allocate vDPA structure");
+		return -ENOMEM;
+	}
+
+	pci_set_master(pdev);
+	pci_set_drvdata(pdev, adapter);
+
+	vf = &adapter->vf;
+	vf->base = pcim_iomap_table(pdev);
+
+	adapter->pdev = pdev;
+	adapter->vdpa.dma_dev = &pdev->dev;
+
+	ret = ifcvf_init_hw(vf, pdev);
+	if (ret) {
+		IFCVF_ERR(pdev, "Failed to init IFCVF hw\n");
+  >>>>>>> revert-7-master
 		goto err;
 	}
 
 	pci_set_master(pdev);
 
+  <<<<<<< patch-1
 	ret = vdpa_mgmtdev_register(&ifcvf_mgmt_dev->mdev);
+  =======
+	ret = vdpa_register_device(&adapter->vdpa, IFCVF_MAX_QUEUE_PAIRS * 2);
+  >>>>>>> revert-7-master
 	if (ret) {
 		IFCVF_ERR(pdev,
 			  "Failed to initialize the management interfaces\n");

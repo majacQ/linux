@@ -1,2 +1,7 @@
+  <<<<<<< patch-1
+  =======
+docutils
+Sphinx==3.0.4
+  >>>>>>> revert-7-master
 sphinx_rtd_theme
 Sphinx==2.4.4

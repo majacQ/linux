@@ -89,8 +89,12 @@ static void vdpa_release_dev(struct device *d)
  */
 struct vdpa_device *__vdpa_alloc_device(struct device *parent,
 					const struct vdpa_config_ops *config,
+  <<<<<<< patch-1
 					size_t size, const char *name,
 					bool use_va)
+  =======
+					size_t size, const char *name)
+  >>>>>>> revert-7-master
 {
 	struct vdpa_device *vdev;
 	int err = -EINVAL;
@@ -120,7 +124,10 @@ struct vdpa_device *__vdpa_alloc_device(struct device *parent,
 	vdev->index = err;
 	vdev->config = config;
 	vdev->features_valid = false;
+  <<<<<<< patch-1
 	vdev->use_va = use_va;
+  =======
+  >>>>>>> revert-7-master
 
 	if (name)
 		err = dev_set_name(&vdev->dev, "%s", name);

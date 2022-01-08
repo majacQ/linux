@@ -154,8 +154,11 @@ static int vdpasim_net_dev_add(struct vdpa_mgmt_dev *mdev, const char *name,
 	if (IS_ERR(simdev))
 		return PTR_ERR(simdev);
 
+  <<<<<<< patch-1
 	vdpasim_net_setup_config(simdev, config);
 
+  =======
+  >>>>>>> revert-7-master
 	ret = _vdpa_register_device(&simdev->vdpa, VDPASIM_NET_VQ_NUM);
 	if (ret)
 		goto reg_err;

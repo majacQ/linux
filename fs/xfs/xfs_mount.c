@@ -516,8 +516,12 @@ xfs_check_summary_counts(
  * Flush and reclaim dirty inodes in preparation for unmount. Inodes and
  * internal inode structures can be sitting in the CIL and AIL at this point,
  * so we need to unpin them, write them back and/or reclaim them before unmount
+  <<<<<<< patch-1
  * can proceed.  In other words, callers are required to have inactivated all
  * inodes.
+  =======
+ * can proceed.
+  >>>>>>> revert-7-master
  *
  * An inode cluster that has been freed can have its buffer still pinned in
  * memory because the transaction is still sitting in a iclog. The stale inodes
@@ -546,15 +550,22 @@ xfs_unmount_flush_inodes(
 	xfs_extent_busy_wait_all(mp);
 	flush_workqueue(xfs_discard_wq);
 
+  <<<<<<< patch-1
 	set_bit(XFS_OPSTATE_UNMOUNTING, &mp->m_opstate);
 
 	xfs_ail_push_all_sync(mp->m_ail);
 	xfs_inodegc_stop(mp);
+  =======
+	mp->m_flags |= XFS_MOUNT_UNMOUNTING;
+
+	xfs_ail_push_all_sync(mp->m_ail);
+  >>>>>>> revert-7-master
 	cancel_delayed_work_sync(&mp->m_reclaim_work);
 	xfs_reclaim_inodes(mp);
 	xfs_health_unmount(mp);
 }
 
+  <<<<<<< patch-1
 static void
 xfs_mount_setup_inode_geom(
 	struct xfs_mount	*mp)
@@ -579,6 +590,8 @@ xfs_agbtree_compute_maxlevels(
 	mp->m_agbtree_maxlevels = max(levels, mp->m_refc_maxlevels);
 }
 
+  =======
+  >>>>>>> revert-7-master
 /*
  * This function does the following on an initial mount of a file system:
  *	- reads the superblock from disk and init the mount struct
@@ -965,6 +978,7 @@ xfs_mountfs(
 	xfs_qm_unmount(mp);
 
 	/*
+  <<<<<<< patch-1
 	 * Inactivate all inodes that might still be in memory after a log
 	 * intent recovery failure so that reclaim can free them.  Metadata
 	 * inodes and the root directory shouldn't need inactivation, but the
@@ -973,6 +987,8 @@ xfs_mountfs(
 	xfs_inodegc_flush(mp);
 
 	/*
+  =======
+  >>>>>>> revert-7-master
 	 * Flush all inode reclamation work and flush the log.
 	 * We have to do this /after/ rtunmount and qm_unmount because those
 	 * two will have scheduled delayed reclaim for the rt/quota inodes.

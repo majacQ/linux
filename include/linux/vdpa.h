@@ -307,6 +307,7 @@ struct vdpa_config_ops {
 
 struct vdpa_device *__vdpa_alloc_device(struct device *parent,
 					const struct vdpa_config_ops *config,
+  <<<<<<< patch-1
 					size_t size, const char *name,
 					bool use_va);
 
@@ -323,6 +324,11 @@ struct vdpa_device *__vdpa_alloc_device(struct device *parent,
  * Return allocated data structure or ERR_PTR upon error
  */
 #define vdpa_alloc_device(dev_struct, member, parent, config, name, use_va)   \
+  =======
+					size_t size, const char *name);
+
+#define vdpa_alloc_device(dev_struct, member, parent, config, name)   \
+  >>>>>>> revert-7-master
 			  container_of(__vdpa_alloc_device( \
 				       parent, config, \
 				       sizeof(dev_struct) + \

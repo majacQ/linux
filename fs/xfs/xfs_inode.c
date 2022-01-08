@@ -988,8 +988,13 @@ xfs_create(
 	/*
 	 * Make sure that we have allocated dquot(s) on disk.
 	 */
+  <<<<<<< patch-1
 	error = xfs_qm_vop_dqalloc(dp, mapped_fsuid(mnt_userns),
 			mapped_fsgid(mnt_userns), prid,
+  =======
+	error = xfs_qm_vop_dqalloc(dp, fsuid_into_mnt(mnt_userns),
+			fsgid_into_mnt(mnt_userns), prid,
+  >>>>>>> revert-7-master
 			XFS_QMOPT_QUOTALL | XFS_QMOPT_INHERIT,
 			&udqp, &gdqp, &pdqp);
 	if (error)
@@ -1142,8 +1147,13 @@ xfs_create_tmpfile(
 	/*
 	 * Make sure that we have allocated dquot(s) on disk.
 	 */
+  <<<<<<< patch-1
 	error = xfs_qm_vop_dqalloc(dp, mapped_fsuid(mnt_userns),
 			mapped_fsgid(mnt_userns), prid,
+  =======
+	error = xfs_qm_vop_dqalloc(dp, fsuid_into_mnt(mnt_userns),
+			fsgid_into_mnt(mnt_userns), prid,
+ >>>>>>> revert-7-master
 			XFS_QMOPT_QUOTALL | XFS_QMOPT_INHERIT,
 			&udqp, &gdqp, &pdqp);
 	if (error)
