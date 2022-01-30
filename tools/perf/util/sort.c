@@ -25,6 +25,7 @@
 #include <traceevent/event-parse.h>
 #include "mem-events.h"
 #include "annotate.h"
+#include "event.h"
 #include "time-utils.h"
 #include "cgroup.h"
 #include "machine.h"
@@ -36,7 +37,7 @@ const char	default_parent_pattern[] = "^sys_|^do_page_fault";
 const char	*parent_pattern = default_parent_pattern;
 const char	*default_sort_order = "comm,dso,symbol";
 const char	default_branch_sort_order[] = "comm,dso_from,symbol_from,symbol_to,cycles";
-const char	default_mem_sort_order[] = "local_weight,mem,sym,dso,symbol_daddr,dso_daddr,snoop,tlb,locked,blocked,local_ins_lat";
+const char	default_mem_sort_order[] = "local_weight,mem,sym,dso,symbol_daddr,dso_daddr,snoop,tlb,locked,blocked,local_ins_lat,p_stage_cyc";
 const char	default_top_sort_order[] = "dso,symbol";
 const char	default_diff_sort_order[] = "dso,symbol";
 const char	default_tracepoint_sort_order[] = "trace";
@@ -45,6 +46,8 @@ const char	*field_order;
 regex_t		ignore_callees_regex;
 int		have_ignore_callees = 0;
 enum sort_mode	sort__mode = SORT_MODE__NORMAL;
+const char	*dynamic_headers[] = {"local_ins_lat", "p_stage_cyc"};
+const char	*arch_specific_sort_keys[] = {"p_stage_cyc"};
 
 /*
  * Replaces all occurrences of a char used with the:
@@ -1322,90 +1325,89 @@ struct sort_entry sort_mispredict = {
 	.se_width_idx	= HISTC_MISPREDICT,
 };
 
-static u64 he_weight(struct hist_entry *he)
-{
-	return he->stat.nr_events ? he->stat.weight / he->stat.nr_events : 0;
-}
-
 static int64_t
-sort__local_weight_cmp(struct hist_entry *left, struct hist_entry *right)
+sort__weight_cmp(struct hist_entry *left, struct hist_entry *right)
 {
-	return he_weight(left) - he_weight(right);
+	return left->weight - right->weight;
 }
 
 static int hist_entry__local_weight_snprintf(struct hist_entry *he, char *bf,
 				    size_t size, unsigned int width)
 {
-	return repsep_snprintf(bf, size, "%-*llu", width, he_weight(he));
+	return repsep_snprintf(bf, size, "%-*llu", width, he->weight);
 }
 
 struct sort_entry sort_local_weight = {
 	.se_header	= "Local Weight",
-	.se_cmp		= sort__local_weight_cmp,
+	.se_cmp		= sort__weight_cmp,
 	.se_snprintf	= hist_entry__local_weight_snprintf,
 	.se_width_idx	= HISTC_LOCAL_WEIGHT,
 };
 
-static int64_t
-sort__global_weight_cmp(struct hist_entry *left, struct hist_entry *right)
-{
-	return left->stat.weight - right->stat.weight;
-}
-
 static int hist_entry__global_weight_snprintf(struct hist_entry *he, char *bf,
 					      size_t size, unsigned int width)
 {
-	return repsep_snprintf(bf, size, "%-*llu", width, he->stat.weight);
+	return repsep_snprintf(bf, size, "%-*llu", width,
+			       he->weight * he->stat.nr_events);
 }
 
 struct sort_entry sort_global_weight = {
 	.se_header	= "Weight",
-	.se_cmp		= sort__global_weight_cmp,
+	.se_cmp		= sort__weight_cmp,
 	.se_snprintf	= hist_entry__global_weight_snprintf,
 	.se_width_idx	= HISTC_GLOBAL_WEIGHT,
 };
 
-static u64 he_ins_lat(struct hist_entry *he)
-{
-		return he->stat.nr_events ? he->stat.ins_lat / he->stat.nr_events : 0;
-}
-
 static int64_t
-sort__local_ins_lat_cmp(struct hist_entry *left, struct hist_entry *right)
+sort__ins_lat_cmp(struct hist_entry *left, struct hist_entry *right)
 {
-		return he_ins_lat(left) - he_ins_lat(right);
+	return left->ins_lat - right->ins_lat;
 }
 
 static int hist_entry__local_ins_lat_snprintf(struct hist_entry *he, char *bf,
 					      size_t size, unsigned int width)
 {
-		return repsep_snprintf(bf, size, "%-*u", width, he_ins_lat(he));
+	return repsep_snprintf(bf, size, "%-*u", width, he->ins_lat);
 }
 
 struct sort_entry sort_local_ins_lat = {
 	.se_header	= "Local INSTR Latency",
-	.se_cmp		= sort__local_ins_lat_cmp,
+	.se_cmp		= sort__ins_lat_cmp,
 	.se_snprintf	= hist_entry__local_ins_lat_snprintf,
 	.se_width_idx	= HISTC_LOCAL_INS_LAT,
 };
 
-static int64_t
-sort__global_ins_lat_cmp(struct hist_entry *left, struct hist_entry *right)
-{
-		return left->stat.ins_lat - right->stat.ins_lat;
-}
-
 static int hist_entry__global_ins_lat_snprintf(struct hist_entry *he, char *bf,
 					       size_t size, unsigned int width)
 {
-		return repsep_snprintf(bf, size, "%-*u", width, he->stat.ins_lat);
+	return repsep_snprintf(bf, size, "%-*u", width,
+			       he->ins_lat * he->stat.nr_events);
 }
 
 struct sort_entry sort_global_ins_lat = {
 	.se_header	= "INSTR Latency",
-	.se_cmp		= sort__global_ins_lat_cmp,
+	.se_cmp		= sort__ins_lat_cmp,
 	.se_snprintf	= hist_entry__global_ins_lat_snprintf,
 	.se_width_idx	= HISTC_GLOBAL_INS_LAT,
+};
+
+static int64_t
+sort__global_p_stage_cyc_cmp(struct hist_entry *left, struct hist_entry *right)
+{
+	return left->p_stage_cyc - right->p_stage_cyc;
+}
+
+static int hist_entry__p_stage_cyc_snprintf(struct hist_entry *he, char *bf,
+					size_t size, unsigned int width)
+{
+	return repsep_snprintf(bf, size, "%-*u", width, he->p_stage_cyc);
+}
+
+struct sort_entry sort_p_stage_cyc = {
+	.se_header      = "Pipeline Stage Cycle",
+	.se_cmp         = sort__global_p_stage_cyc_cmp,
+	.se_snprintf	= hist_entry__p_stage_cyc_snprintf,
+	.se_width_idx	= HISTC_P_STAGE_CYC,
 };
 
 struct sort_entry sort_mem_daddr_sym = {
@@ -1816,6 +1818,21 @@ struct sort_dimension {
 	int			taken;
 };
 
+int __weak arch_support_sort_key(const char *sort_key __maybe_unused)
+{
+	return 0;
+}
+
+const char * __weak arch_perf_header_entry(const char *se_header)
+{
+	return se_header;
+}
+
+static void sort_dimension_add_dynamic_header(struct sort_dimension *sd)
+{
+	sd->entry->se_header = arch_perf_header_entry(sd->entry->se_header);
+}
+
 #define DIM(d, n, func) [d] = { .name = n, .entry = &(func) }
 
 static struct sort_dimension common_sort_dimensions[] = {
@@ -1841,6 +1858,7 @@ static struct sort_dimension common_sort_dimensions[] = {
 	DIM(SORT_CODE_PAGE_SIZE, "code_page_size", sort_code_page_size),
 	DIM(SORT_LOCAL_INS_LAT, "local_ins_lat", sort_local_ins_lat),
 	DIM(SORT_GLOBAL_INS_LAT, "ins_lat", sort_global_ins_lat),
+	DIM(SORT_PIPELINE_STAGE_CYC, "p_stage_cyc", sort_p_stage_cyc),
 };
 
 #undef DIM
@@ -2739,13 +2757,31 @@ int sort_dimension__add(struct perf_hpp_list *list, const char *tok,
 			struct evlist *evlist,
 			int level)
 {
-	unsigned int i;
+	unsigned int i, j;
+
+	/*
+	 * Check to see if there are any arch specific
+	 * sort dimensions not applicable for the current
+	 * architecture. If so, Skip that sort key since
+	 * we don't want to display it in the output fields.
+	 */
+	for (j = 0; j < ARRAY_SIZE(arch_specific_sort_keys); j++) {
+		if (!strcmp(arch_specific_sort_keys[j], tok) &&
+				!arch_support_sort_key(tok)) {
+			return 0;
+		}
+	}
 
 	for (i = 0; i < ARRAY_SIZE(common_sort_dimensions); i++) {
 		struct sort_dimension *sd = &common_sort_dimensions[i];
 
 		if (strncasecmp(tok, sd->name, strlen(tok)))
 			continue;
+
+		for (j = 0; j < ARRAY_SIZE(dynamic_headers); j++) {
+			if (!strcmp(dynamic_headers[j], sd->name))
+				sort_dimension_add_dynamic_header(sd);
+		}
 
 		if (sd->entry == &sort_parent) {
 			int ret = regcomp(&parent_regex, parent_pattern, REG_EXTENDED);
@@ -3314,7 +3350,7 @@ static void add_hpp_sort_string(struct strbuf *sb, struct hpp_dimension *s, int 
 		add_key(sb, s[i].name, llen);
 }
 
-const char *sort_help(const char *prefix)
+char *sort_help(const char *prefix)
 {
 	struct strbuf sb;
 	char *s;

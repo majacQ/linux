@@ -37,31 +37,6 @@ struct gpio_aggregator {
 static DEFINE_MUTEX(gpio_aggregator_lock);	/* protects idr */
 static DEFINE_IDR(gpio_aggregator_idr);
 
-static char *get_arg(char **args)
-{
-	char *start, *end;
-
-	start = skip_spaces(*args);
-	if (!*start)
-		return NULL;
-
-	if (*start == '"') {
-		/* Quoted arg */
-		end = strchr(++start, '"');
-		if (!end)
-			return ERR_PTR(-EINVAL);
-	} else {
-		/* Unquoted arg */
-		for (end = start; *end && !isspace(*end); end++) ;
-	}
-
-	if (*end)
-		*end++ = '\0';
-
-	*args = end;
-	return start;
-}
-
 static int aggr_add_gpio(struct gpio_aggregator *aggr, const char *key,
 			 int hwnum, unsigned int *n)
 {
@@ -83,8 +58,8 @@ static int aggr_add_gpio(struct gpio_aggregator *aggr, const char *key,
 
 static int aggr_parse(struct gpio_aggregator *aggr)
 {
+	char *args = skip_spaces(aggr->args);
 	char *name, *offsets, *p;
-	char *args = aggr->args;
 	unsigned long *bitmap;
 	unsigned int i, n = 0;
 	int error = 0;
@@ -93,13 +68,9 @@ static int aggr_parse(struct gpio_aggregator *aggr)
 	if (!bitmap)
 		return -ENOMEM;
 
-	for (name = get_arg(&args), offsets = get_arg(&args); name;
-	     offsets = get_arg(&args)) {
-		if (IS_ERR(name)) {
-			pr_err("Cannot get GPIO specifier: %pe\n", name);
-			error = PTR_ERR(name);
-			goto free_bitmap;
-		}
+	args = next_arg(args, &name, &p);
+	while (*args) {
+		args = next_arg(args, &offsets, &p);
 
 		p = get_options(offsets, 0, &error);
 		if (error == 0 || *p) {
@@ -125,7 +96,7 @@ static int aggr_parse(struct gpio_aggregator *aggr)
 				goto free_bitmap;
 		}
 
-		name = get_arg(&args);
+		args = next_arg(args, &name, &p);
 	}
 
 	if (!n) {
@@ -276,6 +247,11 @@ struct gpiochip_fwd {
 	unsigned long tmp[];		/* values and descs for multiple ops */
 };
 
+#define fwd_tmp_values(fwd)	&(fwd)->tmp[0]
+#define fwd_tmp_descs(fwd)	(void *)&(fwd)->tmp[BITS_TO_LONGS((fwd)->chip.ngpio)]
+
+#define fwd_tmp_size(ngpios)	(BITS_TO_LONGS((ngpios)) + (ngpios))
+
 static int gpio_fwd_get_direction(struct gpio_chip *chip, unsigned int offset)
 {
 	struct gpiochip_fwd *fwd = gpiochip_get_data(chip);
@@ -308,14 +284,10 @@ static int gpio_fwd_get(struct gpio_chip *chip, unsigned int offset)
 static int gpio_fwd_get_multiple(struct gpiochip_fwd *fwd, unsigned long *mask,
 				 unsigned long *bits)
 {
-	struct gpio_desc **descs;
-	unsigned long *values;
+	struct gpio_desc **descs = fwd_tmp_descs(fwd);
+	unsigned long *values = fwd_tmp_values(fwd);
 	unsigned int i, j = 0;
 	int error;
-
-	/* Both values bitmap and desc pointers are stored in tmp[] */
-	values = &fwd->tmp[0];
-	descs = (void *)&fwd->tmp[BITS_TO_LONGS(fwd->chip.ngpio)];
 
 	bitmap_clear(values, 0, fwd->chip.ngpio);
 	for_each_set_bit(i, mask, fwd->chip.ngpio)
@@ -362,13 +334,9 @@ static void gpio_fwd_set(struct gpio_chip *chip, unsigned int offset, int value)
 static void gpio_fwd_set_multiple(struct gpiochip_fwd *fwd, unsigned long *mask,
 				  unsigned long *bits)
 {
-	struct gpio_desc **descs;
-	unsigned long *values;
+	struct gpio_desc **descs = fwd_tmp_descs(fwd);
+	unsigned long *values = fwd_tmp_values(fwd);
 	unsigned int i, j = 0;
-
-	/* Both values bitmap and desc pointers are stored in tmp[] */
-	values = &fwd->tmp[0];
-	descs = (void *)&fwd->tmp[BITS_TO_LONGS(fwd->chip.ngpio)];
 
 	for_each_set_bit(i, mask, fwd->chip.ngpio) {
 		__assign_bit(j, values, test_bit(i, bits));
@@ -427,8 +395,8 @@ static struct gpiochip_fwd *gpiochip_fwd_create(struct device *dev,
 	unsigned int i;
 	int error;
 
-	fwd = devm_kzalloc(dev, struct_size(fwd, tmp,
-			   BITS_TO_LONGS(ngpios) + ngpios), GFP_KERNEL);
+	fwd = devm_kzalloc(dev, struct_size(fwd, tmp, fwd_tmp_size(ngpios)),
+			   GFP_KERNEL);
 	if (!fwd)
 		return ERR_PTR(-ENOMEM);
 

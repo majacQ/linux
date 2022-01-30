@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  */
 
 /**
@@ -284,8 +284,8 @@ static int ne_setup_cpu_pool(const char *ne_cpu_list)
 	ne_cpu_pool.nr_parent_vm_cores = nr_cpu_ids / ne_cpu_pool.nr_threads_per_core;
 
 	ne_cpu_pool.avail_threads_per_core = kcalloc(ne_cpu_pool.nr_parent_vm_cores,
-					     sizeof(*ne_cpu_pool.avail_threads_per_core),
-					     GFP_KERNEL);
+						     sizeof(*ne_cpu_pool.avail_threads_per_core),
+						     GFP_KERNEL);
 	if (!ne_cpu_pool.avail_threads_per_core) {
 		rc = -ENOMEM;
 
@@ -735,7 +735,7 @@ static int ne_add_vcpu_ioctl(struct ne_enclave *ne_enclave, u32 vcpu_id)
  * * Negative return value on failure.
  */
 static int ne_sanity_check_user_mem_region(struct ne_enclave *ne_enclave,
-	struct ne_user_memory_region mem_region)
+					   struct ne_user_memory_region mem_region)
 {
 	struct ne_mem_region *ne_mem_region = NULL;
 
@@ -771,7 +771,7 @@ static int ne_sanity_check_user_mem_region(struct ne_enclave *ne_enclave,
 		u64 userspace_addr = ne_mem_region->userspace_addr;
 
 		if ((userspace_addr <= mem_region.userspace_addr &&
-		    mem_region.userspace_addr < (userspace_addr + memory_size)) ||
+		     mem_region.userspace_addr < (userspace_addr + memory_size)) ||
 		    (mem_region.userspace_addr <= userspace_addr &&
 		    (mem_region.userspace_addr + mem_region.memory_size) > userspace_addr)) {
 			dev_err_ratelimited(ne_misc_dev.this_device,
@@ -836,7 +836,7 @@ static int ne_sanity_check_user_mem_region_page(struct ne_enclave *ne_enclave,
  * * Negative return value on failure.
  */
 static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
-	struct ne_user_memory_region mem_region)
+					   struct ne_user_memory_region mem_region)
 {
 	long gup_rc = 0;
 	unsigned long i = 0;
@@ -886,8 +886,9 @@ static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
 			goto put_pages;
 		}
 
-		gup_rc = get_user_pages(mem_region.userspace_addr + memory_size, 1, FOLL_GET,
-					ne_mem_region->pages + i, NULL);
+		gup_rc = get_user_pages_unlocked(mem_region.userspace_addr + memory_size, 1,
+						 ne_mem_region->pages + i, FOLL_GET);
+
 		if (gup_rc < 0) {
 			rc = gup_rc;
 
@@ -1014,7 +1015,7 @@ free_mem_region:
  * * Negative return value on failure.
  */
 static int ne_start_enclave_ioctl(struct ne_enclave *ne_enclave,
-	struct ne_enclave_start_info *enclave_start_info)
+				  struct ne_enclave_start_info *enclave_start_info)
 {
 	struct ne_pci_dev_cmd_reply cmd_reply = {};
 	unsigned int cpu = 0;
@@ -1524,7 +1525,8 @@ static const struct file_operations ne_enclave_fops = {
  *			  enclave file descriptor to be further used for enclave
  *			  resources handling e.g. memory regions and CPUs.
  * @ne_pci_dev :	Private data associated with the PCI device.
- * @slot_uid:		Generated unique slot id associated with an enclave.
+ * @slot_uid:		User pointer to store the generated unique slot id
+ *			associated with an enclave to.
  *
  * Context: Process context. This function is called with the ne_pci_dev enclave
  *	    mutex held.
@@ -1532,7 +1534,7 @@ static const struct file_operations ne_enclave_fops = {
  * * Enclave fd on success.
  * * Negative return value on failure.
  */
-static int ne_create_vm_ioctl(struct ne_pci_dev *ne_pci_dev, u64 *slot_uid)
+static int ne_create_vm_ioctl(struct ne_pci_dev *ne_pci_dev, u64 __user *slot_uid)
 {
 	struct ne_pci_dev_cmd_reply cmd_reply = {};
 	int enclave_fd = -1;
@@ -1573,7 +1575,8 @@ static int ne_create_vm_ioctl(struct ne_pci_dev *ne_pci_dev, u64 *slot_uid)
 	mutex_unlock(&ne_cpu_pool.mutex);
 
 	ne_enclave->threads_per_core = kcalloc(ne_enclave->nr_parent_vm_cores,
-		sizeof(*ne_enclave->threads_per_core), GFP_KERNEL);
+					       sizeof(*ne_enclave->threads_per_core),
+					       GFP_KERNEL);
 	if (!ne_enclave->threads_per_core) {
 		rc = -ENOMEM;
 
@@ -1634,7 +1637,18 @@ static int ne_create_vm_ioctl(struct ne_pci_dev *ne_pci_dev, u64 *slot_uid)
 
 	list_add(&ne_enclave->enclave_list_entry, &ne_pci_dev->enclaves_list);
 
-	*slot_uid = ne_enclave->slot_uid;
+	if (copy_to_user(slot_uid, &ne_enclave->slot_uid, sizeof(ne_enclave->slot_uid))) {
+		/*
+		 * As we're holding the only reference to 'enclave_file', fput()
+		 * will call ne_enclave_release() which will do a proper cleanup
+		 * of all so far allocated resources, leaving only the unused fd
+		 * for us to free.
+		 */
+		fput(enclave_file);
+		put_unused_fd(enclave_fd);
+
+		return -EFAULT;
+	}
 
 	fd_install(enclave_fd, enclave_file);
 
@@ -1671,33 +1685,12 @@ static long ne_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case NE_CREATE_VM: {
 		int enclave_fd = -1;
-		struct file *enclave_file = NULL;
 		struct ne_pci_dev *ne_pci_dev = ne_devs.ne_pci_dev;
-		int rc = -EINVAL;
-		u64 slot_uid = 0;
+		u64 __user *slot_uid = (void __user *)arg;
 
 		mutex_lock(&ne_pci_dev->enclaves_list_mutex);
-
-		enclave_fd = ne_create_vm_ioctl(ne_pci_dev, &slot_uid);
-		if (enclave_fd < 0) {
-			rc = enclave_fd;
-
-			mutex_unlock(&ne_pci_dev->enclaves_list_mutex);
-
-			return rc;
-		}
-
+		enclave_fd = ne_create_vm_ioctl(ne_pci_dev, slot_uid);
 		mutex_unlock(&ne_pci_dev->enclaves_list_mutex);
-
-		if (copy_to_user((void __user *)arg, &slot_uid, sizeof(slot_uid))) {
-			enclave_file = fget(enclave_fd);
-			/* Decrement file refs to have release() called. */
-			fput(enclave_file);
-			fput(enclave_file);
-			put_unused_fd(enclave_fd);
-
-			return -EFAULT;
-		}
 
 		return enclave_fd;
 	}

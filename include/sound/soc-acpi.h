@@ -63,6 +63,8 @@ static inline struct snd_soc_acpi_mach *snd_soc_acpi_codec_list(void *arg)
  * @common_hdmi_codec_drv: use commom HDAudio HDMI codec driver
  * @link_mask: links enabled on the board
  * @links: array of link _ADR descriptors, null terminated
+ * @num_dai_drivers: number of elements in @dai_drivers
+ * @dai_drivers: pointer to dai_drivers, used e.g. in nocodec mode
  */
 struct snd_soc_acpi_mach_params {
 	u32 acpi_ipc_irq_index;
@@ -72,6 +74,8 @@ struct snd_soc_acpi_mach_params {
 	bool common_hdmi_codec_drv;
 	u32 link_mask;
 	const struct snd_soc_acpi_link_adr *links;
+	u32 num_dai_drivers;
+	struct snd_soc_dai_driver *dai_drivers;
 };
 
 /**
@@ -125,6 +129,8 @@ struct snd_soc_acpi_link_adr {
  * all firmware/topology related fields.
  *
  * @id: ACPI ID (usually the codec's) used to find a matching machine driver.
+ * @comp_ids: list of compatible audio codecs using the same machine driver,
+ * firmware and topology
  * @link_mask: describes required board layout, e.g. for SoundWire.
  * @links: array of link _ADR descriptors, null terminated.
  * @drv_name: machine driver name
@@ -141,7 +147,8 @@ struct snd_soc_acpi_link_adr {
  */
 /* Descriptor for SST ASoC machine driver */
 struct snd_soc_acpi_mach {
-	const u8 id[ACPI_ID_LEN];
+	u8 id[ACPI_ID_LEN];
+	const struct snd_soc_acpi_codecs *comp_ids;
 	const u32 link_mask;
 	const struct snd_soc_acpi_link_adr *links;
 	const char *drv_name;

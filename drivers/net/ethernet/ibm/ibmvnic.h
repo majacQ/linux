@@ -412,77 +412,6 @@ struct ibmvnic_control_ip_offload {
 	struct ibmvnic_rc rc;
 } __packed __aligned(8);
 
-struct ibmvnic_request_dump_size {
-	u8 first;
-	u8 cmd;
-	u8 reserved[6];
-	__be32 len;
-	struct ibmvnic_rc rc;
-} __packed __aligned(8);
-
-struct ibmvnic_request_dump {
-	u8 first;
-	u8 cmd;
-	u8 reserved1[2];
-	__be32 ioba;
-	__be32 len;
-	u8 reserved2[4];
-} __packed __aligned(8);
-
-struct ibmvnic_request_dump_rsp {
-	u8 first;
-	u8 cmd;
-	u8 reserved[6];
-	__be32 dumped_len;
-	struct ibmvnic_rc rc;
-} __packed __aligned(8);
-
-struct ibmvnic_request_ras_comp_num {
-	u8 first;
-	u8 cmd;
-	u8 reserved1[2];
-	__be32 num_components;
-	u8 reserved2[4];
-	struct ibmvnic_rc rc;
-} __packed __aligned(8);
-
-struct ibmvnic_request_ras_comps {
-	u8 first;
-	u8 cmd;
-	u8 reserved[2];
-	__be32 ioba;
-	__be32 len;
-	struct ibmvnic_rc rc;
-} __packed __aligned(8);
-
-struct ibmvnic_control_ras {
-	u8 first;
-	u8 cmd;
-	u8 correlator;
-	u8 level;
-	u8 op;
-#define IBMVNIC_TRACE_LEVEL	1
-#define IBMVNIC_ERROR_LEVEL	2
-#define IBMVNIC_TRACE_PAUSE	3
-#define IBMVNIC_TRACE_RESUME	4
-#define IBMVNIC_TRACE_ON		5
-#define IBMVNIC_TRACE_OFF		6
-#define IBMVNIC_CHG_TRACE_BUFF_SZ	7
-	u8 trace_buff_sz[3];
-	u8 reserved[4];
-	struct ibmvnic_rc rc;
-} __packed __aligned(8);
-
-struct ibmvnic_collect_fw_trace {
-	u8 first;
-	u8 cmd;
-	u8 correlator;
-	u8 reserved;
-	__be32 ioba;
-	__be32 len;
-	struct ibmvnic_rc rc;
-} __packed __aligned(8);
-
 struct ibmvnic_request_statistics {
 	u8 first;
 	u8 cmd;
@@ -492,15 +421,6 @@ struct ibmvnic_request_statistics {
 	__be32 ioba;
 	__be32 len;
 	u8 reserved[4];
-} __packed __aligned(8);
-
-struct ibmvnic_request_debug_stats {
-	u8 first;
-	u8 cmd;
-	u8 reserved[2];
-	__be32 ioba;
-	__be32 len;
-	struct ibmvnic_rc rc;
 } __packed __aligned(8);
 
 struct ibmvnic_error_indication {
@@ -677,22 +597,8 @@ union ibmvnic_crq {
 	struct ibmvnic_query_ip_offload query_ip_offload_rsp;
 	struct ibmvnic_control_ip_offload control_ip_offload;
 	struct ibmvnic_control_ip_offload control_ip_offload_rsp;
-	struct ibmvnic_request_dump_size request_dump_size;
-	struct ibmvnic_request_dump_size request_dump_size_rsp;
-	struct ibmvnic_request_dump request_dump;
-	struct ibmvnic_request_dump_rsp request_dump_rsp;
-	struct ibmvnic_request_ras_comp_num request_ras_comp_num;
-	struct ibmvnic_request_ras_comp_num request_ras_comp_num_rsp;
-	struct ibmvnic_request_ras_comps request_ras_comps;
-	struct ibmvnic_request_ras_comps request_ras_comps_rsp;
-	struct ibmvnic_control_ras control_ras;
-	struct ibmvnic_control_ras control_ras_rsp;
-	struct ibmvnic_collect_fw_trace collect_fw_trace;
-	struct ibmvnic_collect_fw_trace collect_fw_trace_rsp;
 	struct ibmvnic_request_statistics request_statistics;
 	struct ibmvnic_generic_crq request_statistics_rsp;
-	struct ibmvnic_request_debug_stats request_debug_stats;
-	struct ibmvnic_request_debug_stats request_debug_stats_rsp;
 	struct ibmvnic_error_indication error_indication;
 	struct ibmvnic_link_state_indication link_state_indication;
 	struct ibmvnic_change_mac_addr change_mac_addr;
@@ -921,7 +827,7 @@ struct ibmvnic_rx_buff {
 
 struct ibmvnic_rx_pool {
 	struct ibmvnic_rx_buff *rx_buff;
-	int size;
+	int size;			/* # of buffers in the pool */
 	int index;
 	int buff_size;
 	atomic_t available;
@@ -945,14 +851,16 @@ enum vnic_state {VNIC_PROBING = 1,
 		 VNIC_CLOSING,
 		 VNIC_CLOSED,
 		 VNIC_REMOVING,
-		 VNIC_REMOVED};
+		 VNIC_REMOVED,
+		 VNIC_DOWN};
 
 enum ibmvnic_reset_reason {VNIC_RESET_FAILOVER = 1,
 			   VNIC_RESET_MOBILITY,
 			   VNIC_RESET_FATAL,
 			   VNIC_RESET_NON_FATAL,
 			   VNIC_RESET_TIMEOUT,
-			   VNIC_RESET_CHANGE_PARAM};
+			   VNIC_RESET_CHANGE_PARAM,
+			   VNIC_RESET_PASSIVE_INIT};
 
 struct ibmvnic_rwi {
 	enum ibmvnic_reset_reason reset_reason;
@@ -1059,6 +967,7 @@ struct ibmvnic_adapter {
 	u64 min_mtu;
 	u64 max_mtu;
 	u64 req_mtu;
+	u64 prev_mtu;
 	u64 max_multicast_filters;
 	u64 vlan_header_insertion;
 	u64 rx_vlan_header_insertion;
@@ -1071,13 +980,18 @@ struct ibmvnic_adapter {
 	u64 opt_tx_entries_per_subcrq;
 	u64 opt_rxba_entries_per_subcrq;
 	__be64 tx_rx_desc_req;
-	u8 map_id;
+#define MAX_MAP_ID	255
+	DECLARE_BITMAP(map_ids, MAX_MAP_ID);
 	u32 num_active_rx_scrqs;
 	u32 num_active_rx_pools;
 	u32 num_active_rx_napi;
 	u32 num_active_tx_scrqs;
 	u32 num_active_tx_pools;
+
+	u32 prev_rx_pool_size;
+	u32 prev_tx_pool_size;
 	u32 cur_rx_buf_sz;
+	u32 prev_rx_buf_sz;
 
 	struct tasklet_struct tasklet;
 	enum vnic_state state;
