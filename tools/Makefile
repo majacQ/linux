@@ -1,6 +1,6 @@
-# SPDX-License-Identifier: GPL-2.0
-# Some of the tools (perf) use same make variables
-# as in kernel build.
+SPDX-License-Identifier: GPL-2.0
+Some of the tools (perf) use same make variables
+as in kernel build.
 export srctree=
 export objtree=
 
