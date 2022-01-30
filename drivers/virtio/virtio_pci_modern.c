@@ -172,8 +172,8 @@ static void vp_reset(struct virtio_device *vdev)
 	 */
 	while (vp_modern_get_status(mdev))
 		msleep(1);
-	/* Flush pending VQ/configuration callbacks. */
-	vp_synchronize_vectors(vdev);
+	/* Disable VQ/configuration callbacks. */
+	vp_disable_cbs(vdev);
 }
 
 static u16 vp_config_vector(struct virtio_pci_device *vp_dev, u16 vector)
@@ -192,7 +192,7 @@ static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
 
 	struct virtio_pci_modern_device *mdev = &vp_dev->mdev;
 	struct virtqueue *vq;
-	u16 num, off;
+	u16 num;
 	int err;
 
 	if (index >= vp_modern_get_num_queues(mdev))
@@ -207,9 +207,6 @@ static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
 		dev_warn(&vp_dev->pci_dev->dev, "bad queue size %u", num);
 		return ERR_PTR(-EINVAL);
 	}
-
-	/* get offset of notification word for this vq */
-	off = vp_modern_get_queue_notify_off(mdev, index);
 
 	info->msix_vector = msix_vec;
 
@@ -227,27 +224,7 @@ static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
 				virtqueue_get_avail_addr(vq),
 				virtqueue_get_used_addr(vq));
 
-	if (mdev->notify_base) {
-		/* offset should not wrap */
-		if ((u64)off * mdev->notify_offset_multiplier + 2
-		    > mdev->notify_len) {
-			dev_warn(&mdev->pci_dev->dev,
-				 "bad notification offset %u (x %u) "
-				 "for queue %u > %zd",
-				 off, mdev->notify_offset_multiplier,
-				 index, mdev->notify_len);
-			err = -EINVAL;
-			goto err_map_notify;
-		}
-		vq->priv = (void __force *)mdev->notify_base +
-			off * mdev->notify_offset_multiplier;
-	} else {
-		vq->priv = (void __force *)vp_modern_map_capability(mdev,
-							  mdev->notify_map_cap, 2, 2,
-							  off * mdev->notify_offset_multiplier, 2,
-							  NULL);
-	}
-
+	vq->priv = (void __force *)vp_modern_map_vq_notify(mdev, index, NULL);
 	if (!vq->priv) {
 		err = -ENOMEM;
 		goto err_map_notify;
@@ -403,6 +380,7 @@ static bool vp_get_shm_region(struct virtio_device *vdev,
 }
 
 static const struct virtio_config_ops virtio_pci_config_nodev_ops = {
+	.enable_cbs	= vp_enable_cbs,
 	.get		= NULL,
 	.set		= NULL,
 	.generation	= vp_generation,
@@ -420,6 +398,7 @@ static const struct virtio_config_ops virtio_pci_config_nodev_ops = {
 };
 
 static const struct virtio_config_ops virtio_pci_config_ops = {
+	.enable_cbs	= vp_enable_cbs,
 	.get		= vp_get,
 	.set		= vp_set,
 	.generation	= vp_generation,

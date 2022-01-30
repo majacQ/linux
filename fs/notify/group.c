@@ -88,7 +88,7 @@ void fsnotify_destroy_group(struct fsnotify_group *group)
 	 * that deliberately ignores overflow events.
 	 */
 	if (group->overflow_event)
-		group->ops->free_event(group->overflow_event);
+		group->ops->free_event(group, group->overflow_event);
 
 	fsnotify_put_group(group);
 }
@@ -122,7 +122,6 @@ static struct fsnotify_group *__fsnotify_alloc_group(
 
 	/* set to 0 when there a no external references to this group */
 	refcount_set(&group->refcnt, 1);
-	atomic_set(&group->num_marks, 0);
 	atomic_set(&group->user_waits, 0);
 
 	spin_lock_init(&group->notification_lock);

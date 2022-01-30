@@ -25,6 +25,7 @@
 		serial1 = &duart1;
 		mmc0 = &esdhc;
 		mmc1 = &esdhc1;
+		rtc1 = &ftm_alarm0;
 	};
 
 	chosen {
@@ -319,7 +320,7 @@
 
 &enetc_port1 {
 	phy-handle = <&qds_phy1>;
-	phy-connection-type = "rgmii-id";
+	phy-mode = "rgmii-id";
 	status = "okay";
 };
 
@@ -332,5 +333,13 @@
 };
 
 &sata {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+};
+
+&usb1 {
 	status = "okay";
 };

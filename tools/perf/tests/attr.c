@@ -34,6 +34,7 @@
 #include "event.h"
 #include "util.h"
 #include "tests.h"
+#include "pmu.h"
 
 #define ENV "PERF_TEST_ATTR"
 
@@ -177,12 +178,15 @@ static int run_dir(const char *d, const char *perf)
 	return system(cmd) ? TEST_FAIL : TEST_OK;
 }
 
-int test__attr(struct test *test __maybe_unused, int subtest __maybe_unused)
+static int test__attr(struct test_suite *test __maybe_unused, int subtest __maybe_unused)
 {
 	struct stat st;
 	char path_perf[PATH_MAX];
 	char path_dir[PATH_MAX];
 	char *exec_path;
+
+	if (perf_pmu__has_hybrid())
+		return TEST_SKIP;
 
 	/* First try development tree tests. */
 	if (!lstat("./tests", &st))
@@ -203,3 +207,5 @@ int test__attr(struct test *test __maybe_unused, int subtest __maybe_unused)
 
 	return TEST_SKIP;
 }
+
+DEFINE_SUITE("Setup struct perf_event_attr", attr);

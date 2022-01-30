@@ -58,6 +58,25 @@ struct mlxsw_tx_info {
 	bool is_emad;
 };
 
+struct mlxsw_rx_md_info {
+	u32 cookie_index;
+	u32 latency;
+	u32 tx_congestion;
+	union {
+		/* Valid when 'tx_port_valid' is set. */
+		u16 tx_sys_port;
+		u16 tx_lag_id;
+	};
+	u8 tx_lag_port_index; /* Valid when 'tx_port_is_lag' is set. */
+	u8 tx_tc;
+	u8 latency_valid:1,
+	   tx_congestion_valid:1,
+	   tx_tc_valid:1,
+	   tx_port_valid:1,
+	   tx_port_is_lag:1,
+	   unused:3;
+};
+
 bool mlxsw_core_skb_transmit_busy(struct mlxsw_core *mlxsw_core,
 				  const struct mlxsw_tx_info *tx_info);
 int mlxsw_core_skb_transmit(struct mlxsw_core *mlxsw_core, struct sk_buff *skb,
@@ -230,8 +249,6 @@ mlxsw_core_port_devlink_port_get(struct mlxsw_core *mlxsw_core,
 				 u8 local_port);
 bool mlxsw_core_port_is_xm(const struct mlxsw_core *mlxsw_core, u8 local_port);
 struct mlxsw_env *mlxsw_core_env(const struct mlxsw_core *mlxsw_core);
-bool mlxsw_core_is_initialized(const struct mlxsw_core *mlxsw_core);
-int mlxsw_core_module_max_width(struct mlxsw_core *mlxsw_core, u8 module);
 
 int mlxsw_core_schedule_dw(struct delayed_work *dwork, unsigned long delay);
 bool mlxsw_core_schedule_work(struct work_struct *work);
@@ -515,7 +532,7 @@ enum mlxsw_devlink_param_id {
 struct mlxsw_skb_cb {
 	union {
 		struct mlxsw_tx_info tx_info;
-		u32 cookie_index; /* Only used during receive */
+		struct mlxsw_rx_md_info rx_md_info;
 	};
 };
 
